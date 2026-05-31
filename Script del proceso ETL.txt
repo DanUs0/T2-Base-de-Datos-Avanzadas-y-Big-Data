@@ -1,0 +1,249 @@
+-- ============================================================
+--  BASE DE DATOS OLAP - BD_MADERERA_DW
+--  Modelo Estrella para Business Intelligence
+-- ============================================================
+CREATE DATABASE BD_MADERERA_DW;
+GO
+USE BD_MADERERA_DW;
+GO
+
+-- ---- DIMENSIONES ----
+
+CREATE TABLE DIM_TIEMPO (
+  idTiempo   INT PRIMARY KEY,  -- clave sustituta YYYYMMDD
+  fecha      DATE NOT NULL,
+  anio       INT,
+  trimestre  INT,
+  mes        INT,
+  nombreMes  VARCHAR(20),
+  semana     INT,
+  dia        INT,
+  diaSemana  VARCHAR(15)
+);
+GO
+
+CREATE TABLE DIM_PRODUCTO (
+  idProductoDW   INT PRIMARY KEY IDENTITY(1,1),
+  idProductoOLTP INT,  -- FK logica a OLTP
+  nombre         VARCHAR(100),
+  dimensiones    VARCHAR(100),
+  color          VARCHAR(50),
+  dureza         VARCHAR(50),
+  precioUnitario DECIMAL(10,2),
+  vigente        BIT DEFAULT 1,   -- SCD tipo 2
+  fechaInicio    DATE,
+  fechaFin       DATE
+);
+GO
+
+CREATE TABLE DIM_CLIENTE (
+  idClienteDW    INT PRIMARY KEY IDENTITY(1,1),
+  idClienteOLTP  INT,
+  nombre_cliente VARCHAR(100),
+  dni            VARCHAR(15),
+  telefono       VARCHAR(20),
+  direccion      VARCHAR(200)
+);
+GO
+
+CREATE TABLE DIM_EMPLEADO (
+  idEmpleadoDW   INT PRIMARY KEY IDENTITY(1,1),
+  idEmpleadoOLTP INT,
+  nombre         VARCHAR(100),
+  cargo          VARCHAR(50)
+);
+GO
+
+CREATE TABLE DIM_PROVEEDOR (
+  idProveedorDW   INT PRIMARY KEY IDENTITY(1,1),
+  idProveedorOLTP INT,
+  nombre          VARCHAR(100),
+  ruc             VARCHAR(20)
+);
+GO
+
+-- ---- TABLA DE HECHOS ----
+
+CREATE TABLE FACT_VENTAS (
+  idHecho        INT PRIMARY KEY IDENTITY(1,1),
+  idTiempo       INT NOT NULL REFERENCES DIM_TIEMPO(idTiempo),
+  idProductoDW   INT NOT NULL REFERENCES DIM_PRODUCTO(idProductoDW),
+  idClienteDW    INT NOT NULL REFERENCES DIM_CLIENTE(idClienteDW),
+  idEmpleadoDW   INT NOT NULL REFERENCES DIM_EMPLEADO(idEmpleadoDW),
+  idProveedorDW  INT NOT NULL REFERENCES DIM_PROVEEDOR(idProveedorDW),
+  -- Medidas
+  cantidadVendida    INT           NOT NULL,
+  montoVenta         DECIMAL(10,2) NOT NULL,
+  costoProducto      DECIMAL(10,2),
+  margenBruto        DECIMAL(10,2),  -- montoVenta - costoProducto
+  numeroVenta        INT           NOT NULL  -- ventaId OLTP
+);
+GO
+
+-- ---- PROCESO ETL ----
+
+CREATE OR ALTER PROCEDURE etl_CargarDimTiempo
+  @fechaInicio DATE = '2024-01-01',
+  @fechaFin    DATE = '2026-12-31'
+AS BEGIN
+  DECLARE @fecha DATE = @fechaInicio;
+  WHILE @fecha <= @fechaFin
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM DIM_TIEMPO WHERE idTiempo = CONVERT(INT,FORMAT(@fecha,'yyyyMMdd')))
+    INSERT INTO DIM_TIEMPO
+    VALUES (
+      CONVERT(INT,FORMAT(@fecha,'yyyyMMdd')),
+      @fecha,
+      YEAR(@fecha),
+      DATEPART(QUARTER,@fecha),
+      MONTH(@fecha),
+      FORMAT(@fecha,'MMMM','es-PE'),
+      DATEPART(WEEK,@fecha),
+      DAY(@fecha),
+      FORMAT(@fecha,'dddd','es-PE')
+    );
+    SET @fecha = DATEADD(DAY,1,@fecha);
+  END
+END;
+GO
+
+CREATE OR ALTER PROCEDURE etl_CargarDimensiones
+AS BEGIN
+  -- Productos
+  MERGE DIM_PRODUCTO AS tgt
+  USING (SELECT idProducto,nombre,dimensiones,color,dureza,precioUnitario
+         FROM BD_MADERERA.dbo.PRODUCTO) AS src
+  ON tgt.idProductoOLTP = src.idProducto AND tgt.vigente = 1
+  WHEN NOT MATCHED THEN
+    INSERT (idProductoOLTP,nombre,dimensiones,color,dureza,precioUnitario,vigente,fechaInicio)
+    VALUES (src.idProducto,src.nombre,src.dimensiones,src.color,src.dureza,
+            src.precioUnitario,1,CAST(GETDATE() AS DATE));
+
+  -- Clientes
+  MERGE DIM_CLIENTE AS tgt
+  USING (SELECT idCliente,nombre_cliente,dni,telefono,direccion
+         FROM BD_MADERERA.dbo.CLIENTE) AS src
+  ON tgt.idClienteOLTP = src.idCliente
+  WHEN NOT MATCHED THEN
+    INSERT (idClienteOLTP,nombre_cliente,dni,telefono,direccion)
+    VALUES (src.idCliente,src.nombre_cliente,src.dni,src.telefono,src.direccion);
+
+  -- Empleados
+  MERGE DIM_EMPLEADO AS tgt
+  USING (SELECT empleadoId,nombre,cargo FROM BD_MADERERA.dbo.EMPLEADO) AS src
+  ON tgt.idEmpleadoOLTP = src.empleadoId
+  WHEN NOT MATCHED THEN
+    INSERT (idEmpleadoOLTP,nombre,cargo) VALUES (src.empleadoId,src.nombre,src.cargo);
+
+  -- Proveedores
+  MERGE DIM_PROVEEDOR AS tgt
+  USING (SELECT proveedorId,nombre,ruc FROM BD_MADERERA.dbo.PROVEEDOR) AS src
+  ON tgt.idProveedorOLTP = src.proveedorId
+  WHEN NOT MATCHED THEN
+    INSERT (idProveedorOLTP,nombre,ruc) VALUES (src.proveedorId,src.nombre,src.ruc);
+END;
+GO
+
+CREATE OR ALTER PROCEDURE etl_CargarFactVentas
+  @fechaCarga DATE = NULL
+AS BEGIN
+  SET @fechaCarga = ISNULL(@fechaCarga, CAST(GETDATE() AS DATE));
+  INSERT INTO FACT_VENTAS
+  (idTiempo,idProductoDW,idClienteDW,idEmpleadoDW,idProveedorDW,
+   cantidadVendida,montoVenta,costoProducto,margenBruto,numeroVenta)
+  SELECT
+    CONVERT(INT,FORMAT(CAST(v.fecha AS DATE),'yyyyMMdd')),
+    dp.idProductoDW,
+    dc.idClienteDW,
+    de.idEmpleadoDW,
+    dpv.idProveedorDW,
+    dv.cantidad,
+    dv.precioFinal,
+    pr.precioUnitario * dv.cantidad,
+    dv.precioFinal - (pr.precioUnitario * dv.cantidad),
+    v.ventaId
+  FROM BD_MADERERA.dbo.DETALLE_VENTA dv
+  JOIN BD_MADERERA.dbo.VENTA    v  ON v.ventaId    = dv.ventaId
+  JOIN BD_MADERERA.dbo.PRODUCTO pr ON pr.idProducto = dv.idProducto
+  JOIN DIM_PRODUCTO  dp  ON dp.idProductoOLTP = pr.idProducto  AND dp.vigente=1
+  JOIN DIM_CLIENTE   dc  ON dc.idClienteOLTP  = v.idCliente
+  JOIN DIM_EMPLEADO  de  ON de.idEmpleadoOLTP = v.empleadoId
+  JOIN DIM_PROVEEDOR dpv ON dpv.idProveedorOLTP = pr.proveedorId
+  WHERE CAST(v.fecha AS DATE) = @fechaCarga
+    AND NOT EXISTS (
+      SELECT 1 FROM FACT_VENTAS f
+      WHERE f.numeroVenta = v.ventaId AND f.idProductoDW = dp.idProductoDW
+    );
+END;
+GO
+
+-- ---- VISTAS OLAP / REPORTES BI ----
+
+-- Vista: Ventas por mes y producto
+CREATE OR ALTER VIEW vw_VentasMensualesPorProducto AS
+SELECT
+  t.anio, t.mes, t.nombreMes,
+  p.nombre AS producto,
+  SUM(f.cantidadVendida) AS totalUnidades,
+  SUM(f.montoVenta)      AS ingresoTotal,
+  SUM(f.margenBruto)     AS margenTotal
+FROM FACT_VENTAS f
+JOIN DIM_TIEMPO   t ON t.idTiempo   = f.idTiempo
+JOIN DIM_PRODUCTO p ON p.idProductoDW = f.idProductoDW
+GROUP BY t.anio, t.mes, t.nombreMes, p.nombre;
+GO
+
+-- Vista: Rendimiento por empleado
+CREATE OR ALTER VIEW vw_RendimientoEmpleado AS
+SELECT
+  e.nombre AS empleado,
+  e.cargo,
+  t.anio, t.trimestre,
+  COUNT(DISTINCT f.numeroVenta) AS ventasRealizadas,
+  SUM(f.montoVenta)             AS montoTotal
+FROM FACT_VENTAS f
+JOIN DIM_EMPLEADO e ON e.idEmpleadoDW = f.idEmpleadoDW
+JOIN DIM_TIEMPO   t ON t.idTiempo     = f.idTiempo
+GROUP BY e.nombre, e.cargo, t.anio, t.trimestre;
+GO
+
+-- Vista: Top clientes por ingreso
+CREATE OR ALTER VIEW vw_TopClientes AS
+SELECT
+  c.nombre_cliente,
+  COUNT(DISTINCT f.numeroVenta) AS totalCompras,
+  SUM(f.cantidadVendida)        AS unidadesCompradas,
+  SUM(f.montoVenta)             AS totalGastado
+FROM FACT_VENTAS f
+JOIN DIM_CLIENTE c ON c.idClienteDW = f.idClienteDW
+GROUP BY c.nombre_cliente;
+GO
+
+
+Análisis OLAP - Consultas de ejemplo
+Con el Data Warehouse implementado, se pueden ejecutar las siguientes consultas analíticas:
+-- Ventas por trimestre (roll-up)
+SELECT anio, trimestre, SUM(f.montoVenta) AS ingresoTrimestral
+FROM FACT_VENTAS f JOIN DIM_TIEMPO t ON t.idTiempo = f.idTiempo
+GROUP BY anio, trimestre ORDER BY anio, trimestre;
+
+-- Top 5 productos del mes (drill-down)
+SELECT TOP 5 p.nombre, SUM(f.cantidadVendida) AS unidades,
+       SUM(f.montoVenta) AS ingresos
+FROM FACT_VENTAS f
+JOIN DIM_PRODUCTO p ON p.idProductoDW = f.idProductoDW
+JOIN DIM_TIEMPO   t ON t.idTiempo     = f.idTiempo
+WHERE t.anio = 2026 AND t.mes = 1
+GROUP BY p.nombre ORDER BY unidades DESC;
+
+-- Rendimiento por empleado en el año (slice)
+SELECT e.nombre, e.cargo,
+       COUNT(DISTINCT f.numeroVenta) AS ventas,
+       SUM(f.montoVenta)             AS montoTotal,
+       AVG(f.margenBruto)            AS margenPromedio
+FROM FACT_VENTAS f
+JOIN DIM_EMPLEADO e ON e.idEmpleadoDW = f.idEmpleadoDW
+JOIN DIM_TIEMPO   t ON t.idTiempo     = f.idTiempo
+WHERE t.anio = 2026
+GROUP BY e.nombre, e.cargo ORDER BY montoTotal DESC;
+
