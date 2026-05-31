@@ -1,0 +1,353 @@
+
+<h2 class="sr-only">Dashboard de Business Intelligence - Maderera Corporativa. Muestra KPIs de ventas, inventario y cantidades del año 2024.</h2>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .db-root { width: 100%; padding: 0; }
+
+  .db-header {
+    background: #1A3A2A;
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: var(--border-radius-lg);
+    margin-bottom: 16px;
+  }
+  .db-header-left { display: flex; align-items: center; gap: 14px; }
+  .db-logo {
+    width: 40px; height: 40px; border-radius: 8px;
+    background: #3B7A4A;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .db-title { font-size: 17px; font-weight: 500; color: #fff; }
+  .db-subtitle { font-size: 12px; color: #9FC5AF; margin-top: 2px; }
+  .db-period { font-size: 12px; color: #9FC5AF; text-align: right; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .kpi-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-accent {
+    position: absolute; top: 0; left: 0;
+    width: 4px; height: 100%;
+    border-radius: 2px 0 0 2px;
+  }
+  .kpi-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+  .kpi-delta { font-size: 12px; margin-top: 4px; }
+  .delta-up { color: #1D9E75; }
+  .delta-down { color: #E24B4A; }
+
+  .charts-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .chart-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px;
+  }
+  .chart-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 12px; }
+
+  .charts-row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .table-card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .db-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .db-table th {
+    text-align: left; padding: 6px 10px;
+    color: var(--color-text-secondary);
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    font-weight: 500;
+  }
+  .db-table td { padding: 7px 10px; color: var(--color-text-primary); border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .db-table tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 20px; font-size: 11px; font-weight: 500;
+  }
+  .badge-green { background: #EAF3DE; color: #3B6D11; }
+  .badge-red { background: #FCEBEB; color: #A32D2D; }
+  .badge-amber { background: #FAEEDA; color: #854F0B; }
+
+  .legend-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; font-size: 11px; color: var(--color-text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+  .filter-bar {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .filter-label { font-size: 12px; color: var(--color-text-secondary); }
+  .filter-btn {
+    padding: 5px 12px; border-radius: 20px; border: 0.5px solid var(--color-border-secondary);
+    font-size: 12px; cursor: pointer; background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+  }
+  .filter-btn.active { background: #1A3A2A; color: #fff; border-color: #1A3A2A; }
+
+  .footer-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+</style>
+
+<div class="db-root">
+
+  <div class="db-header">
+    <div class="db-header-left">
+      <div class="db-logo" aria-hidden="true"><i class="ti ti-trees" style="font-size:22px; color:#A8DFC0;"></i></div>
+      <div>
+        <div class="db-title">Maderera del Sur S.A.C.</div>
+        <div class="db-subtitle">Dashboard de Inteligencia de Negocios — Analistas</div>
+      </div>
+    </div>
+    <div class="db-period">
+      <div style="font-size:13px; color:#fff; font-weight:500;">Año fiscal 2024</div>
+      <div>Actualizado: 31 mayo 2025</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <span class="filter-label"><i class="ti ti-filter" aria-hidden="true"></i> Período:</span>
+    <button class="filter-btn" onclick="setFilter('Q1',this)">Q1</button>
+    <button class="filter-btn" onclick="setFilter('Q2',this)">Q2</button>
+    <button class="filter-btn" onclick="setFilter('Q3',this)">Q3</button>
+    <button class="filter-btn" onclick="setFilter('Q4',this)">Q4</button>
+    <button class="filter-btn active" onclick="setFilter('ALL',this)">Anual</button>
+    <span class="filter-label" style="margin-left:8px;"><i class="ti ti-category" aria-hidden="true"></i> Categoría:</span>
+    <button class="filter-btn active" onclick="setCat('all',this)">Todas</button>
+    <button class="filter-btn" onclick="setCat('madera',this)">Madera</button>
+    <button class="filter-btn" onclick="setCat('derivados',this)">Derivados</button>
+    <button class="filter-btn" onclick="setCat('servicios',this)">Servicios</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-accent" style="background:#1A3A2A;"></div><div class="kpi-label">Ventas totales</div><div class="kpi-value" id="kv1">S/ 4.87M</div><div class="kpi-delta delta-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +12.4% vs 2023</div></div>
+    <div class="kpi-card"><div class="kpi-accent" style="background:#3B7A4A;"></div><div class="kpi-label">Unidades vendidas</div><div class="kpi-value" id="kv2">38,240</div><div class="kpi-delta delta-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +8.1% vs 2023</div></div>
+    <div class="kpi-card"><div class="kpi-accent" style="background:#639922;"></div><div class="kpi-label">Margen bruto</div><div class="kpi-value" id="kv3">38.2%</div><div class="kpi-delta delta-down"><i class="ti ti-trending-down" aria-hidden="true"></i> -1.3pp vs 2023</div></div>
+    <div class="kpi-card"><div class="kpi-accent" style="background:#BA7517;"></div><div class="kpi-label">Stock en almacén</div><div class="kpi-value" id="kv4">12,850 m³</div><div class="kpi-delta delta-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +5.0% capacidad</div></div>
+    <div class="kpi-card"><div class="kpi-accent" style="background:#185FA5;"></div><div class="kpi-label">Clientes activos</div><div class="kpi-value" id="kv5">286</div><div class="kpi-delta delta-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +22 nuevos</div></div>
+    <div class="kpi-card"><div class="kpi-accent" style="background:#993C1D;"></div><div class="kpi-label">Ticket promedio</div><div class="kpi-value" id="kv6">S/ 17,045</div><div class="kpi-delta delta-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +3.9% vs 2023</div></div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title"><i class="ti ti-chart-bar" aria-hidden="true"></i> Ventas mensuales vs Meta (S/)</div>
+      <div class="legend-row">
+        <span><span class="legend-dot" style="background:#1A3A2A;"></span>Ventas reales</span>
+        <span><span class="legend-dot" style="background:#3B7A4A; opacity:0.4;"></span>Meta mensual</span>
+      </div>
+      <div style="position:relative; width:100%; height:200px;">
+        <canvas id="chartVentas" role="img" aria-label="Ventas mensuales vs meta 2024. Enero a Diciembre.">Ventas mensuales vs meta 2024.</canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><i class="ti ti-chart-donut" aria-hidden="true"></i> Ventas por categoría</div>
+      <div class="legend-row">
+        <span><span class="legend-dot" style="background:#1A3A2A;"></span>Madera 52%</span>
+        <span><span class="legend-dot" style="background:#3B7A4A;"></span>Derivados 31%</span>
+        <span><span class="legend-dot" style="background:#9FC5AF;"></span>Servicios 17%</span>
+      </div>
+      <div style="position:relative; width:100%; height:200px;">
+        <canvas id="chartCat" role="img" aria-label="Distribución de ventas por categoría: madera 52%, derivados 31%, servicios 17%">Madera 52%, Derivados 31%, Servicios 17%.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row2">
+    <div class="chart-card">
+      <div class="chart-title"><i class="ti ti-package" aria-hidden="true"></i> Stock por tipo de madera (m³)</div>
+      <div style="position:relative; width:100%; height:180px;">
+        <canvas id="chartStock" role="img" aria-label="Stock de madera por tipo en metros cúbicos">Stock por tipo de madera.</canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><i class="ti ti-chart-line" aria-hidden="true"></i> Evolución de unidades vendidas</div>
+      <div style="position:relative; width:100%; height:180px;">
+        <canvas id="chartUnid" role="img" aria-label="Evolución trimestral de unidades vendidas">Unidades vendidas por trimestre.</canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title"><i class="ti ti-map-pin" aria-hidden="true"></i> Ventas por región</div>
+      <div style="position:relative; width:100%; height:180px;">
+        <canvas id="chartReg" role="img" aria-label="Ventas por región geográfica">Ventas por región.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-row">
+    <div class="table-card">
+      <div class="chart-title"><i class="ti ti-crown" aria-hidden="true"></i> Top 8 productos por ventas</div>
+      <table class="db-table">
+        <thead><tr><th>Producto</th><th>Categoría</th><th>Ventas (S/)</th><th>Stock</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr><td>Madera Tornillo 2"x4"</td><td>Madera</td><td>487,200</td><td>2,400 m³</td><td><span class="badge badge-green">Normal</span></td></tr>
+          <tr><td>Tablero MDF 18mm</td><td>Derivados</td><td>412,800</td><td>850 und</td><td><span class="badge badge-green">Normal</span></td></tr>
+          <tr><td>Madera Cedro 1"x6"</td><td>Madera</td><td>381,500</td><td>180 m³</td><td><span class="badge badge-amber">Bajo</span></td></tr>
+          <tr><td>Triplay Lupuna 4mm</td><td>Derivados</td><td>334,100</td><td>620 und</td><td><span class="badge badge-green">Normal</span></td></tr>
+          <tr><td>Madera Caoba Selecta</td><td>Madera</td><td>298,700</td><td>42 m³</td><td><span class="badge badge-red">Crítico</span></td></tr>
+          <tr><td>Parquet Shihuahuaco</td><td>Derivados</td><td>276,400</td><td>310 m²</td><td><span class="badge badge-green">Normal</span></td></tr>
+          <tr><td>Madera Roble 3"x3"</td><td>Madera</td><td>241,900</td><td>960 m³</td><td><span class="badge badge-green">Normal</span></td></tr>
+          <tr><td>Servicio Corte CNC</td><td>Servicios</td><td>198,300</td><td>—</td><td><span class="badge badge-green">Activo</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <div class="chart-title"><i class="ti ti-users" aria-hidden="true"></i> Top clientes por facturación</div>
+      <table class="db-table">
+        <thead><tr><th>Cliente</th><th>Segmento</th><th>Facturado</th><th>Pedidos</th><th>Var.</th></tr></thead>
+        <tbody>
+          <tr><td>Constructora Lima Norte SAC</td><td>Construcción</td><td>S/ 342,000</td><td>28</td><td class="delta-up">+18%</td></tr>
+          <tr><td>Mueblería El Roble EIRL</td><td>Muebles</td><td>S/ 287,500</td><td>41</td><td class="delta-up">+7%</td></tr>
+          <tr><td>Carpintería Hermanos Soto</td><td>Carpintería</td><td>S/ 198,400</td><td>62</td><td class="delta-down">-3%</td></tr>
+          <tr><td>Inmobiliaria Sol del Sur</td><td>Construcción</td><td>S/ 176,200</td><td>19</td><td class="delta-up">+31%</td></tr>
+          <tr><td>Distribuidora Maderas Perú</td><td>Distribución</td><td>S/ 154,800</td><td>34</td><td class="delta-up">+12%</td></tr>
+          <tr><td>Ferretek Industrial SAC</td><td>Industrial</td><td>S/ 143,100</td><td>22</td><td class="delta-down">-8%</td></tr>
+          <tr><td>Contratistas Generales JRC</td><td>Construcción</td><td>S/ 138,700</td><td>17</td><td class="delta-up">+5%</td></tr>
+          <tr><td>Taller Artesanal Madera Viva</td><td>Artesanía</td><td>S/ 112,300</td><td>48</td><td class="delta-up">+22%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const GREEN_DARK = '#1A3A2A';
+const GREEN_MID = '#3B7A4A';
+const GREEN_LIGHT = '#9FC5AF';
+const AMBER = '#BA7517';
+const BLUE = '#185FA5';
+const CORAL = '#993C1D';
+const gridColor = 'rgba(100,100,100,0.12)';
+const textColor = '#888';
+
+const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const ventas = [312000,298000,385000,420000,445000,398000,412000,468000,502000,487000,431000,417000];
+const meta   = [320000,320000,380000,380000,440000,440000,420000,420000,500000,500000,450000,450000];
+
+new Chart(document.getElementById('chartVentas'), {
+  type: 'bar',
+  data: {
+    labels: meses,
+    datasets: [
+      { label: 'Ventas reales', data: ventas, backgroundColor: GREEN_DARK, borderRadius: 4, order: 2 },
+      { label: 'Meta', data: meta, type: 'line', borderColor: GREEN_MID, backgroundColor: 'transparent', borderWidth: 2, borderDash: [5,4], pointRadius: 0, order: 1 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, autoSkip: false, maxRotation: 0 } },
+      y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 11 }, callback: v => 'S/ ' + (v/1000).toFixed(0) + 'k' } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartCat'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Madera', 'Derivados', 'Servicios'],
+    datasets: [{ data: [52, 31, 17], backgroundColor: [GREEN_DARK, GREEN_MID, GREEN_LIGHT], borderWidth: 0 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.label + ': ' + c.parsed + '%' } } },
+    cutout: '62%'
+  }
+});
+
+new Chart(document.getElementById('chartStock'), {
+  type: 'bar',
+  data: {
+    labels: ['Tornillo','Cedro','Caoba','Shihuahuaco','Roble','Lupuna','Copaiba'],
+    datasets: [{ label: 'm³', data: [2400, 180, 42, 650, 960, 1100, 380], backgroundColor: [GREEN_DARK,GREEN_MID,CORAL,GREEN_DARK,GREEN_MID,GREEN_LIGHT,AMBER], borderRadius: 4 }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } },
+      y: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartUnid'), {
+  type: 'line',
+  data: {
+    labels: ['Q1 2022','Q2 2022','Q3 2022','Q4 2022','Q1 2023','Q2 2023','Q3 2023','Q4 2023','Q1 2024','Q2 2024','Q3 2024','Q4 2024'],
+    datasets: [{ label: 'Unidades', data: [7200,7800,8100,7600,8400,8900,9200,8700,9100,9800,10200,9700], borderColor: GREEN_MID, backgroundColor: 'rgba(59,122,74,0.08)', fill: true, tension: 0.4, pointRadius: 3, pointBackgroundColor: GREEN_DARK }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 9 }, maxRotation: 45, autoSkip: true } },
+      y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 } } }
+    }
+  }
+});
+
+new Chart(document.getElementById('chartReg'), {
+  type: 'bar',
+  data: {
+    labels: ['Lima','Arequipa','Cusco','Trujillo','Piura','Iquitos','Otros'],
+    datasets: [{ label: 'S/', data: [1840000, 720000, 580000, 490000, 380000, 340000, 520000], backgroundColor: [GREEN_DARK,GREEN_MID,GREEN_LIGHT,AMBER,BLUE,CORAL,GREEN_DARK], borderRadius: 4 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } },
+      y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 }, callback: v => 'S/'+(v/1000).toFixed(0)+'k' } }
+    }
+  }
+});
+
+let activeFilter = 'ALL';
+let activeCat = 'all';
+
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-bar .filter-btn').forEach(b => { if (['Q1','Q2','Q3','Q4','ALL'].includes(b.textContent.replace('Anual','ALL') || b.textContent)) b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+function setCat(c, btn) {
+  activeCat = c;
+  document.querySelectorAll('.filter-bar .filter-btn').forEach(b => { if (['Todas','Madera','Derivados','Servicios'].includes(b.textContent)) b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+</script>
